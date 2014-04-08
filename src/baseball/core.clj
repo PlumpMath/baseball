@@ -1,20 +1,19 @@
 (ns baseball.core
   (:require [clojure.core.async :refer (chan >!! <!! >! <! close! go go-loop timeout alt! put!)]))
 
-(def me-ch (chan))
-(def you-ch (chan))
+(defn make-player
+  [action]
+  (let [ch (chan)]
+    (go-loop []
+      (let [msg (<! ch)]
+        (action msg)))
+    ch))
 
 ;player one loop
-(def me (go-loop
-          []
-          (let [msg (<! me-ch)]
-            (println msg))))
+(def me (make-player (fn [msg] (println msg))))
 
 ;player two loop
-(def you (go-loop
-          []
-          (let [msg (<! you-ch)]
-            (put! me-ch msg))))
+(def you (make-player #(put! me %)))
 
-(>!! you-ch "test")
+(>!! you "test")
 
