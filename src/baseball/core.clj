@@ -1,6 +1,5 @@
 (ns baseball.core
   (:require [clojure.core.async :refer (chan >!! <!! >! <! close! go go-loop timeout alt! put!)]))
-(declare you)
 
 (defn make-player
   [max-cnt action]
@@ -14,13 +13,17 @@
     ch))
 
 ;player one loop
-(def me (make-player 10
+(def me (make-player 10000
                      #(do
-                        (println %)
-                        (put! you %))))
+                        (println (:ball %))
+                        (put! (:channel %) (:ball %)))))
 
 ;player two loop
-(def you (make-player 10 #(put! me %)))
+(def player1 (make-player 10 #(put! me {:channel player1, :ball %})))
+(def la-lob (make-player 10 #(put! me {:channel la-lob, :ball %})))
+(def grounder (make-player 10 #(put! me {:channel grounder, :ball %})))
 
-(>!! you "test")
+(>!! player1 "ball1")
+(>!! la-lob "ball2")
+(>!! grounder "ball3")
 
