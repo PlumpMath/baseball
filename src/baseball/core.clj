@@ -8,22 +8,18 @@
       [cnt max-cnt]
       (when (pos? cnt)
         (let [msg (<! ch)]
-          (action msg)
+          (action ch msg)
           (recur (dec cnt)))))
     ch))
 
 ;player one loop
 (def me (make-player 10000
                      #(do
-                        (println (:ball %))
-                        (put! (:channel %) (:ball %)))))
+                        (println (:ball %2))
+                        (put! (:channel %2) (:ball %2)))))
 
 ;player two loop
-(def player1 (make-player 10 #(put! me {:channel player1, :ball %})))
-(def la-lob (make-player 10 #(put! me {:channel la-lob, :ball %})))
-(def grounder (make-player 10 #(put! me {:channel grounder, :ball %})))
-
-(>!! player1 "ball1")
-(>!! la-lob "ball2")
-(>!! grounder "ball3")
+(doseq [x (range 10)]
+  (let [ch (make-player 10 #(put! me {:channel %1, :ball %2}))]
+    (>!! ch (str "ball" x))))
 
