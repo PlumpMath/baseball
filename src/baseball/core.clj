@@ -2,16 +2,45 @@
   (:require [clojure.core.async :refer (chan >!! <!! >! <! close! go go-loop)]
             [clojure.core.match :refer (match)]))
 
+
+;; http://www.variousandsundry.com/cs/blog/2014/02/20/baseball-processes/
+;; It’s like playing catch in the backyard. You don’t want to play by yourself. So you tell a friend
+;; to stand about 20 paces away from you. Once they’re there, they wave their arms to be sure you can
+;; see them. Having seen them, you throw them the ball. They throw it back as a solid line drive 
+;; right at your mitt. End of process.
+;;
+;; Unless, of course, your friend is recursive. And wants another ball…
+;;
+;; Maybe you want to practice catching pop flies, though. Tell another friend to stand over there
+;; somewhere. Call him “La Lob”. Have him let you know where he is. Throw him the ball. He’ll throw it
+;; back in a graceful arc. And, assuming you made him to be recursive, he’ll keep standing there,
+;; waiting for more, ready to send any balls back from whence they came in a graceful arc.
+
 (defprotocol Player
   (player-name [p])
+  (play [p]))
+
+(defprotocol Friend
   (walk [p] [p paces])
   (throw-to [p ball])
-  (play [p])
   (done [p]))
 
 (deftype LazyLobber [ch nm max-cnt partner]
   Player
   (player-name [p] nm)
+  (play [p]
+    (go-loop
+      [cnt max-cnt]
+      (let [msg (<! ch)]
+
+        (if (pos? cnt)
+          (do
+            (println (str nm " got the ball (" cnt "). Throwing back."))
+            (>! partner [:ball p "Lazy Lob"])
+            (recur (dec cnt)))
+          (>! partner [:stop p]))))
+    p)
+  Friend
   (walk [p] (walk p 20))
   (walk [p paces]
     (future
@@ -22,54 +51,47 @@
   (throw-to [p ball] (>!! ch ball))
   (done [p]
     (println (str nm " is done playing."))
-    (close! ch))
-  (play [p]
-    (go-loop
-      [cnt max-cnt]
-      (let [msg (<! ch)]
-
-       (if (pos? cnt)
-         (do
-           (println (str nm " got the ball (" cnt "). Throwing back."))
-           (>! partner [:ball p "Lazy Lob"])
-           (recur (dec cnt)))
-         (>! partner [:stop p]))))
-    p))
+    (close! ch)))
 
 (def players (atom []))
 (defn start-playing [p]
   (swap! players conj p)
   (throw-to p "Ball"))
 
-(defn stop-playing [p me]
+(defn stop-playing [p]
   (swap! players #(remove (fn [p1] (= (player-name p) (player-name p1))) %))
   (done p))
 
-(defn make-me
-  []
-  (let [me-ch (chan)]
+(defn play-with [me &friends]
+  (play me)
+  (doseq [f &friends]
+    (walk (play f))))
+
+(deftype Me [me-ch]
+  Player
+  (player-name [me] "Geoff")
+  (play [me]
     (go-loop
       []
       (let [ball (<! me-ch)]
         ;; (println ball)
         (match [ball]
                [[:ready p]] (start-playing p)
-               [[:stop p]] (stop-playing p me-ch)
+               [[:stop p]] (stop-playing p)
                [[:ball p msg]] (throw-to p msg)
                :else (println "Got some message I don't know how to handle"))
 
         (if (empty? @players)
           (println "Game over, time to go home.")
-          (recur))))
-    me-ch))
+          (recur))))))
 
 ;player two loop
 (defn run []
-  (let [me (make-me)
-        friend1 (LazyLobber. (chan) "Friend1" 30 me)
-        friend2 (LazyLobber. (chan) "Friend2" 15 me)
-        friend3 (LazyLobber. (chan) "Friend3" 5 me)]
+  (let [me-chan (chan)
+        me (Me. me-chan)
+        friend1 (LazyLobber. (chan) "Friend1" 30 me-chan)
+        friend2 (LazyLobber. (chan) "Friend2" 15 me-chan)
+        friend3 (LazyLobber. (chan) "Friend3" 5 me-chan)]
 
-    (doseq [f [friend1 friend2 friend3]]
-      (walk (play f)))))
+    (play-with me [friend1 friend2 friend3])))
 
