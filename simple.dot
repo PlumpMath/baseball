@@ -1,0 +1,14 @@
+digraph Simple_State_Machine {
+    rankdir=LR
+    graph [fontsize=14]
+    edge [fontsize=14]
+    node [fontsize=14]
+    node [shape = doublecircle]; Starting Done;
+    node [shape = circle];
+
+    Starting -> Playing
+    Playing -> Playing
+    Playing -> Done
+}
+
+

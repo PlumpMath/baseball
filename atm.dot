@@ -1,0 +1,17 @@
+digraph ATM_Machine {
+    graph [fontsize=14]
+    rankdir=LR
+    edge [fontsize=14]
+    node [fontsize=14]
+    node [shape = doublecircle]; Waiting;
+    node [shape = circle];
+
+    Waiting -> Swipe
+    Swipe -> Pin
+    Pin -> Amount
+    Amount -> HostResponse [label="Authorize Txn"]
+    HostResponse -> Dispense
+    HostResponse -> Error
+    Dispense -> Waiting
+    Error -> Waiting
+}
