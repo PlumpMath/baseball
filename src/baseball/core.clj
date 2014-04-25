@@ -22,36 +22,41 @@
 
 (defprotocol Friend
   (walk [p] [p paces])
-  (throw-to [p ball])
-  (done [p]))
+  (throw-to [p ball]))
 
 (deftype LazyLobber [ch nm max-cnt partner]
   Player
   (player-name [p] nm)
   (play [p]
     (go-loop
-      [cnt max-cnt]
-      (let [msg (<! ch)]
-
-        (if (pos? cnt)
-          (do
-            (println (str nm " got the ball (" cnt "). Throwing back."))
-            (>! partner [:ball p "Lazy Lob"])
-            (recur (dec cnt)))
-          (>! partner [:stop p]))))
+      [cnt max-cnt state :walking]
+      (let [[new-cnt new-state]
+            (case state
+              :walking (let [paces (<! ch)]
+                         (println "Walking to position")
+                         (Thread/sleep (* 100 paces))
+                         (println "Ready to play")
+                         (>! partner [:ready p])
+                         [cnt :playing])
+              :playing (let [msg (<! ch)]
+                         (println (str nm " got the ball (" cnt "). Throwing back."))
+                         (if-not (pos? (dec cnt))
+                           [(dec cnt) :done]
+                           (do
+                             (>! partner [:ball p "Lazy Lob"])
+                             [(dec cnt) state])))
+              :done (do
+                      (println (str nm " is done playing."))
+                      (>! partner [:stop p])
+                      (close! ch)
+                      [-1 :done]))]
+        (when (>= new-cnt 0)
+          (recur new-cnt new-state))))
     p)
   Friend
   (walk [p] (walk p 20))
-  (walk [p paces]
-    (future
-      (println "Walking to position")
-      (Thread/sleep (* 100 paces))
-      (println "Ready to play")
-      (>!! partner [:ready p])))
-  (throw-to [p ball] (>!! ch ball))
-  (done [p]
-    (println (str nm " is done playing."))
-    (close! ch)))
+  (walk [p paces] (>!! ch paces))
+  (throw-to [p ball] (>!! ch ball)))
 
 (def players (atom []))
 (defn start-playing [p]
@@ -59,8 +64,7 @@
   (throw-to p "Ball"))
 
 (defn stop-playing [p]
-  (swap! players #(remove (fn [p1] (= (player-name p) (player-name p1))) %))
-  (done p))
+  (swap! players #(remove (fn [p1] (= (player-name p) (player-name p1))) %)))
 
 (defn play-with [me &friends]
   (play me)
